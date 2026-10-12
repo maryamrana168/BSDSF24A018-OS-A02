@@ -148,3 +148,23 @@ The `getopt()` function processes the command-line options. The `-l` option sele
 The selected mode is passed to `do_ls()`. After collecting and sorting the filenames, `do_ls()` uses conditional statements to call `print_long_entry()` for long listings, `print_horizontal()` for horizontal display, or `print_columns()` for the default vertical display.
 
 This design separates argument processing, directory reading, and output formatting, making the program easier to maintain and extend.
+
+## Feature 5: Alphabetical Sort (v1.4.0)
+
+### Q1. Why is it necessary to read all directory entries into memory before sorting them? What are the potential drawbacks for directories containing millions of files?
+
+The `readdir()` function reads directory entries one at a time. To sort all filenames alphabetically using `qsort()`, the program first collects the filenames into a dynamically allocated array. Once all entries have been collected, `qsort()` sorts the array before the display function prints the results.
+
+For directories containing millions of files, storing every filename and its pointer can consume a large amount of memory. Memory allocation may fail, and collecting and sorting a large number of entries can take considerable time. An alternative for very large collections is external sorting, which processes data in smaller portions using secondary storage.
+
+### Q2. Explain the purpose and signature of the comparison function required by `qsort()`. How does it work, and why must it take `const void *` arguments?
+
+The comparison function tells `qsort()` how to compare two array elements. Its signature is:
+
+`int compare_names(const void *a, const void *b)`
+
+The `const void *` parameters allow the generic `qsort()` function to accept a comparison function for different data types. The `const` qualifier indicates that the comparison function should not modify the elements being compared.
+
+Because the array contains pointers to filenames, the function converts the arguments to pointers to filename-pointer elements and dereferences them to obtain the strings. It then uses `strcmp()` to compare the filenames.
+
+The function returns a negative value if the first filename comes before the second, zero if the filenames are equal, and a positive value if the first comes after the second. `qsort()` uses these results to arrange the filenames alphabetically.
