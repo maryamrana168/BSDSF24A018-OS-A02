@@ -128,3 +128,23 @@ This allows the program to print filenames vertically down each column before mo
 The `ioctl()` system call is used with `TIOCGWINSZ` to obtain the terminal window dimensions. The number of terminal columns is stored in `ws_col`. This helps the program determine how many filename columns can fit on the screen.
 
 If terminal-size detection fails or the output is not connected to a suitable terminal, the program uses 80 columns as a fallback. This is a reasonable default, but it may not match the actual terminal width. Consequently, output may be too wide or may leave unused space.
+
+## Feature 4: Horizontal Column Display (`-x`)
+
+### Q1. Compare the implementation complexity of down-then-across and horizontal display. Which requires more pre-calculation, and why?
+
+The down-then-across display requires more pre-calculation. It must find the longest filename, determine the terminal width, calculate the number of columns that fit, calculate the required number of rows, and use an index formula to print entries column by column.
+
+The horizontal display is simpler. It processes filenames from left to right while tracking the current line position. Before printing the next filename, it checks whether the filename and its spacing will exceed the terminal width. If so, it starts a new line.
+
+Therefore, the down-then-across algorithm requires more layout calculations, whereas the horizontal algorithm mainly needs to track the current output position.
+
+### Q2. How are the `-l`, `-x`, and default display modes managed?
+
+The program defines an enumeration called `DisplayMode` with three values: `DISPLAY_VERTICAL`, `DISPLAY_LONG`, and `DISPLAY_HORIZONTAL`.
+
+The `getopt()` function processes the command-line options. The `-l` option selects `DISPLAY_LONG`, while `-x` selects `DISPLAY_HORIZONTAL`. If neither option is provided, the program uses `DISPLAY_VERTICAL` by default.
+
+The selected mode is passed to `do_ls()`. After collecting and sorting the filenames, `do_ls()` uses conditional statements to call `print_long_entry()` for long listings, `print_horizontal()` for horizontal display, or `print_columns()` for the default vertical display.
+
+This design separates argument processing, directory reading, and output formatting, making the program easier to maintain and extend.
