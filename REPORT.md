@@ -110,3 +110,21 @@ Others: read only.
 Conclusion
 
 The stat() and lstat() functions retrieve file metadata, while st_mode encodes file type and permissions. Bitwise operations and predefined macros let a C program extract this information and display it in the long listing format used by ls -l.
+
+## Feature 3: Column Display (Down Then Across)
+
+### Question 1: Explain the logic for displaying filenames down then across. Why is a single loop insufficient?
+
+The program first collects all filenames into a dynamically allocated array and determines the longest filename. It calculates the available terminal width using `ioctl()` and `TIOCGWINSZ`, then calculates the number of columns and rows.
+
+The filename index is calculated using:
+
+`index = row + column * rows`
+
+This allows the program to print filenames vertically down each column before moving to the next column. A simple loop that prints each filename followed by a newline would display only one filename per line and would not produce the required column layout.
+
+### Question 2: What is the purpose of ioctl()? What are the limitations of using a fixed width of 80 columns as a fallback?
+
+The `ioctl()` system call is used with `TIOCGWINSZ` to obtain the terminal window dimensions. The number of terminal columns is stored in `ws_col`. This helps the program determine how many filename columns can fit on the screen.
+
+If terminal-size detection fails or the output is not connected to a suitable terminal, the program uses 80 columns as a fallback. This is a reasonable default, but it may not match the actual terminal width. Consequently, output may be too wide or may leave unused space.
