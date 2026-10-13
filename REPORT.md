@@ -210,3 +210,40 @@ if (mode & (S_IXUSR | S_IXGRP | S_IXOTH))
 Here, the bitwise OR (`|`) combines the three permission masks, and the bitwise AND (`&`) checks whether at least one corresponding bit is set. If the condition is true, the filename is printed in green.
 
 **Note:** This check identifies files with at least one execute permission bit set. It does not guarantee that the current user can successfully execute the file, because actual execution also depends on the user's permissions, directory access, filesystem settings, and other security restrictions.
+
+
+## Report Questions — Feature 7: Recursive Listing (v1.6.0)
+
+### 1. In a recursive function, what is a base case? In the context of recursive `ls`, what stops the recursion from continuing forever?
+
+A **base case** is a condition that stops a recursive function from making further recursive calls. Without a suitable stopping condition, recursion could continue indefinitely or eventually exhaust the program's resources.
+
+In the recursive `ls` implementation, recursion proceeds only when the `-R` option is enabled and an entry is identified as a directory using `S_ISDIR(file_info.st_mode)`. The function does not recurse into ordinary files or symbolic links. It also skips entries beginning with a dot, including `.` and `..`.
+
+Eventually, a directory contains no eligible subdirectories. In that case, no further recursive calls are made, and the function returns. This provides the natural stopping condition for the traversal.
+
+### 2. Why is it essential to construct a full path before making a recursive call? What would happen if we simply called `do_ls("subdir")` from within `do_ls("parent_dir")`?
+
+Constructing the full path is essential because a relative filename such as `subdir` is resolved relative to the program's current working directory, not automatically relative to the directory currently being listed.
+
+For example, if the program is listing `parent_dir` and finds a directory named `subdir`, the correct path is:
+
+```text
+parent_dir/subdir
+```
+
+The program can construct this path using:
+
+```c
+snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+```
+
+It should then pass the full path to the recursive call:
+
+```c
+do_ls(path, mode, recursive_flag);
+```
+
+If the program instead calls `do_ls("subdir", mode, recursive_flag)`, it may try to open a directory named `subdir` in the current working directory. This can result in an error or cause it to list the wrong directory.
+
+Using the full path ensures that every recursive call visits the intended nested directory, regardless of the program's current working directory.
