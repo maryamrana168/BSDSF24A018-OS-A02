@@ -247,3 +247,4 @@ do_ls(path, mode, recursive_flag);
 If the program instead calls `do_ls("subdir", mode, recursive_flag)`, it may try to open a directory named `subdir` in the current working directory. This can result in an error or cause it to list the wrong directory.
 
 Using the full path ensures that every recursive call visits the intended nested directory, regardless of the program's current working directory.
+
