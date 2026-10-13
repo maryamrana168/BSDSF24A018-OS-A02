@@ -1,5 +1,4 @@
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -13,6 +12,14 @@
 #include <grp.h>
 #include <time.h>
 
+/* ANSI escape codes for colorized output. */
+#define COLOR_BLUE    "\033[0;34m"
+#define COLOR_GREEN   "\033[0;32m"
+#define COLOR_RED     "\033[0;31m"
+#define COLOR_PINK    "\033[0;35m"
+#define COLOR_REVERSE "\033[7m"
+#define COLOR_RESET   "\033[0m"
+
 /* Available display modes. */
 enum DisplayMode
 {
@@ -25,10 +32,10 @@ enum DisplayMode
 int compare_names(const void *a, const void *b);
 void do_ls(const char *dir, enum DisplayMode mode);
 void print_permissions(mode_t mode, char permissions[11]);
+void print_colorized_name(const char *dir, const char *name);
 void print_long_entry(const char *dir, const char *name);
-void print_columns(char **names, size_t count);
-void print_horizontal(char **names, size_t count);
-
+void print_columns(const char *dir, char **names, size_t count);
+void print_horizontal(const char *dir, char **names, size_t count);
 
 /* Main function. */
 int main(int argc, char *argv[])
@@ -50,7 +57,8 @@ int main(int argc, char *argv[])
                 break;
 
             default:
-                fprintf(stderr, "Usage: %s [-l | -x] [directory ...]\n",
+                fprintf(stderr,
+                        "Usage: %s [-l | -x] [directory ...]\n",
                         argv[0]);
                 return 1;
         }
@@ -75,7 +83,6 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-
 /* Convert file permission bits into a string. */
 void print_permissions(mode_t mode, char permissions[11])
 {
@@ -89,17 +96,19 @@ void print_permissions(mode_t mode, char permissions[11])
     permissions[1] = (mode & S_IRUSR) ? 'r' : '-';
     permissions[2] = (mode & S_IWUSR) ? 'w' : '-';
     permissions[3] = (mode & S_IXUSR) ? 'x' : '-';
+
     permissions[4] = (mode & S_IRGRP) ? 'r' : '-';
     permissions[5] = (mode & S_IWGRP) ? 'w' : '-';
     permissions[6] = (mode & S_IXGRP) ? 'x' : '-';
+
     permissions[7] = (mode & S_IROTH) ? 'r' : '-';
     permissions[8] = (mode & S_IWOTH) ? 'w' : '-';
     permissions[9] = (mode & S_IXOTH) ? 'x' : '-';
+
     permissions[10] = '\0';
 }
 
-
-/* Compare two filenames for alphabetical sorting. */
+/* Compare filenames for alphabetical sorting. */
 int compare_names(const void *a, const void *b)
 {
     const char *name_a = *(const char **)a;
@@ -108,6 +117,73 @@ int compare_names(const void *a, const void *b)
     return strcmp(name_a, name_b);
 }
 
+/*
+ * Print a filename with a color determined by its file type.
+ * lstat() identifies a symbolic link without following its target.
+ */
+void print_colorized_name(const char *dir, const char *name)
+{
+    char path[4096];
+    struct stat file_info;
+    const char *color = "";
+    size_t length = strlen(name);
+
+    int written = snprintf(path, sizeof(path), "%s/%s", dir, name);
+
+    if (written < 0 || (size_t)written >= sizeof(path))
+    {
+        printf("%s", name);
+        return;
+    }
+
+    if (lstat(path, &file_info) == -1)
+    {
+        /* If metadata cannot be obtained, print without color. */
+        printf("%s", name);
+        return;
+    }
+
+    mode_t mode = file_info.st_mode;
+
+    /* Symbolic links must be checked before their targets. */
+    if (S_ISLNK(mode))
+    {
+        color = COLOR_PINK;
+    }
+    /* Special files use reverse video. */
+    else if (S_ISCHR(mode) || S_ISBLK(mode) ||
+             S_ISFIFO(mode) || S_ISSOCK(mode))
+    {
+        color = COLOR_REVERSE;
+    }
+    /* Directories are blue. */
+    else if (S_ISDIR(mode))
+    {
+        color = COLOR_BLUE;
+    }
+    /* Recognized archive extensions are red. */
+    else if ((length >= 4 &&
+              strcmp(name + length - 4, ".tar") == 0) ||
+             (length >= 4 &&
+              strcmp(name + length - 4, ".zip") == 0) ||
+             (length >= 3 &&
+              strcmp(name + length - 3, ".gz") == 0))
+    {
+        color = COLOR_RED;
+    }
+    /* Files with any execute permission bit are green. */
+    else if (S_ISREG(mode) &&
+             (mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
+    {
+        color = COLOR_GREEN;
+    }
+
+    /* Reset formatting after each colored filename. */
+    printf("%s%s%s",
+           color,
+           name,
+           color[0] != '\0' ? COLOR_RESET : "");
+}
 
 /* Print one file in long-listing format. */
 void print_long_entry(const char *dir, const char *name)
@@ -117,7 +193,13 @@ void print_long_entry(const char *dir, const char *name)
     char permissions[11];
     char time_text[32];
 
-    snprintf(path, sizeof(path), "%s/%s", dir, name);
+    int written = snprintf(path, sizeof(path), "%s/%s", dir, name);
+
+    if (written < 0 || (size_t)written >= sizeof(path))
+    {
+        fprintf(stderr, "Path too long: %s/%s\n", dir, name);
+        return;
+    }
 
     if (lstat(path, &file_info) == -1)
     {
@@ -138,19 +220,21 @@ void print_long_entry(const char *dir, const char *name)
         strcpy(time_text, "unknown time");
     }
 
-    printf("%s %2lu %-8s %-8s %8lld %s %s\n",
+    /* Keep metadata uncolored and color only the filename. */
+    printf("%s %2lu %-8s %-8s %8lld %s ",
            permissions,
            (unsigned long)file_info.st_nlink,
            owner ? owner->pw_name : "?",
            group ? group->gr_name : "?",
            (long long)file_info.st_size,
-           time_text,
-           name);
+           time_text);
+
+    print_colorized_name(dir, name);
+    putchar('\n');
 }
 
-
 /* Default display: down-then-across (vertical columns). */
-void print_columns(char **names, size_t count)
+void print_columns(const char *dir, char **names, size_t count)
 {
     if (count == 0)
         return;
@@ -202,15 +286,18 @@ void print_columns(char **names, size_t count)
 
             if (index < count)
             {
-                if (col == columns - 1 ||
-                    index + rows >= count)
+                print_colorized_name(dir, names[index]);
+
+                /*
+                 * Calculate padding from the filename length.
+                 * ANSI escape codes do not count as visible characters.
+                 */
+                if (col != columns - 1 && index + rows < count)
                 {
-                    printf("%s", names[index]);
-                }
-                else
-                {
-                    printf("%-*s",
-                           (int)column_width, names[index]);
+                    size_t padding =
+                        column_width - strlen(names[index]);
+
+                    printf("%*s", (int)padding, "");
                 }
             }
         }
@@ -219,9 +306,8 @@ void print_columns(char **names, size_t count)
     }
 }
 
-
 /* Horizontal display: left-to-right, wrapping at terminal width. */
-void print_horizontal(char **names, size_t count)
+void print_horizontal(const char *dir, char **names, size_t count)
 {
     if (count == 0)
         return;
@@ -242,10 +328,7 @@ void print_horizontal(char **names, size_t count)
     {
         size_t name_length = strlen(names[i]);
 
-        /*
-         * If the next filename plus spacing will exceed
-         * the terminal width, start a new line.
-         */
+        /* Wrap before printing if the next name will not fit. */
         if (position > 0 &&
             position + 2 + name_length > terminal_width)
         {
@@ -260,13 +343,12 @@ void print_horizontal(char **names, size_t count)
             position += 2;
         }
 
-        printf("%s", names[i]);
+        print_colorized_name(dir, names[i]);
         position += name_length;
     }
 
     putchar('\n');
 }
-
 
 /* Read directory entries and choose the requested display mode. */
 void do_ls(const char *dir, enum DisplayMode mode)
@@ -350,10 +432,10 @@ void do_ls(const char *dir, enum DisplayMode mode)
 
     closedir(dp);
 
-    /* Sort filenames before displaying them. */
+    /* Sort filenames alphabetically before displaying them. */
     qsort(names, count, sizeof(char *), compare_names);
 
-    /* Select the correct output function. */
+    /* Select the requested output mode. */
     if (mode == DISPLAY_LONG)
     {
         for (size_t i = 0; i < count; i++)
@@ -361,11 +443,11 @@ void do_ls(const char *dir, enum DisplayMode mode)
     }
     else if (mode == DISPLAY_HORIZONTAL)
     {
-        print_horizontal(names, count);
+        print_horizontal(dir, names, count);
     }
     else
     {
-        print_columns(names, count);
+        print_columns(dir, names, count);
     }
 
     /* Release dynamically allocated memory. */
