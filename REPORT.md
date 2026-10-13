@@ -168,3 +168,45 @@ The `const void *` parameters allow the generic `qsort()` function to accept a c
 Because the array contains pointers to filenames, the function converts the arguments to pointers to filename-pointer elements and dereferences them to obtain the strings. It then uses `strcmp()` to compare the filenames.
 
 The function returns a negative value if the first filename comes before the second, zero if the filenames are equal, and a positive value if the first comes after the second. `qsort()` uses these results to arrange the filenames alphabetically.
+## Report Questions — Feature 6: Colorized Output (v1.5.0)
+
+### 1. How do ANSI escape codes work to produce color in a standard Linux terminal? Show the specific code sequence for printing text in green.
+
+ANSI escape codes are special character sequences used to control text formatting in a terminal. They can change the foreground color, background color, and text style. The escape character is represented in C by `\033` (octal 33), followed by `[` and a formatting code.
+
+For example, the following C statement prints text in green:
+
+```c
+printf("\033[0;32mThis text is green\033[0m\n");
+```
+
+Explanation:
+
+* `\033` represents the escape character that begins the ANSI sequence.
+* `[0;32m` selects normal text formatting and green foreground color.
+* `This text is green` is the text displayed in green.
+* `\033[0m` resets the terminal formatting to its default settings.
+* `\n` moves the cursor to the next line.
+
+In Feature 6, these escape codes are defined using macros such as `COLOR_GREEN`, `COLOR_BLUE`, `COLOR_RED`, and `COLOR_RESET`. The program prints the appropriate color code before each filename and resets the formatting afterward. This makes it easier to distinguish directories, executables, archives, symbolic links, and special files.
+
+### 2. To color an executable file, which permission bits in `st_mode` must be checked to determine whether it is executable by the owner, group, or others?
+
+The `st_mode` field of the `struct stat` structure contains information about a file's type and permission bits. Linux provides three execute-permission constants:
+
+* `S_IXUSR`: Indicates that the file's owner has execute permission.
+* `S_IXGRP`: Indicates that members of the file's group have execute permission.
+* `S_IXOTH`: Indicates that other users have execute permission.
+
+To determine whether any of these execute bits is set, the program can use the bitwise AND (`&`) operator:
+
+```c
+if (mode & (S_IXUSR | S_IXGRP | S_IXOTH))
+{
+    printf("\033[0;32m%s\033[0m", filename);
+}
+```
+
+Here, the bitwise OR (`|`) combines the three permission masks, and the bitwise AND (`&`) checks whether at least one corresponding bit is set. If the condition is true, the filename is printed in green.
+
+**Note:** This check identifies files with at least one execute permission bit set. It does not guarantee that the current user can successfully execute the file, because actual execution also depends on the user's permissions, directory access, filesystem settings, and other security restrictions.
